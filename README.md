@@ -12,7 +12,7 @@ This health checker should:
 
 ## How To Build
 
-First you need to install Rust and Cargo. Then run the following commands, but your target may be different.
+First you need to install Rust and Cargo. Then run the following commands. Notice that your target may be different:
 
 ```bash
 TARGET=x86_64-unknown-linux-gnu
@@ -47,9 +47,19 @@ $ echo $?
 1
 ```
 
+It also has an acceptable speed for health checking purposes:
+
+```bash
+$ time ./http_health_checker "https://www.google.com/"
+
+real 0m0,120s
+user 0m0,007s
+sys  0m0,003s
+```
+
 ## Dockerfile
 
-To enable the health checking in you container, add the following commands in your Dockerfile:
+To enable the health checking in your container, add the following command in your Dockerfile:
 
 ```dockerfile
 HEALTHCHECK \
@@ -60,11 +70,13 @@ HEALTHCHECK \
     CMD [ "/path/to/health_checker", "http://localhost:12345/ping" ]
 ```
 
-This assumes suppose that:
+This obviously assumes that:
 
 - The health checker exists in `/path/to/health_checker`
 - Your API runs in the same container on port 12345
 - The route used to know if your main API is alive is `/ping`
+
+You may use different arguments `HEALTHCHECK` depending on your needs.
 
 ### Full Dockerfile Example
 
