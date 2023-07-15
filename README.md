@@ -42,7 +42,7 @@ $ echo $?
 And 1 on failure:
 
 ```bash
-$ ./http_health_checker "https://random.bullshi.go/useless/parameter"
+$ ./http_health_checker "https://random.bullshit.go/useless/parameter"
 $ echo $?
 1
 ```
@@ -60,7 +60,7 @@ HEALTHCHECK \
     CMD [ "/path/to/health_checker", "http://localhost:12345/ping" ]
 ```
 
-This obviously suppose that:
+This assumes suppose that:
 
 - The health checker exists in `/path/to/health_checker`
 - Your API runs in the same container on port 12345
