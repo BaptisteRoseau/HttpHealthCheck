@@ -42,19 +42,9 @@ $ echo $?
 And 1 on failure:
 
 ```bash
-$ ./http_health_checker "https://random.bullshit.go/useless/parameter"
+$ ./http_health_checker "https://random.nonsense.local/false/route/parameter"
 $ echo $?
 1
-```
-
-It also has an acceptable speed for health checking purposes:
-
-```bash
-$ time ./http_health_checker "https://www.google.com/"
-
-real 0m0,120s
-user 0m0,007s
-sys  0m0,003s
 ```
 
 ## Dockerfile
@@ -94,9 +84,9 @@ Suppose you have and application `application` and the following directories:
 You can use the following Dockerfile to build you application and the health checker alongside it:
 
 ```dockerfile
+ARG target
 FROM rust:1.70 as BUILDER
 
-ARG target=x86_64-unknown-linux-gnu
 COPY src/  /app/src/
 COPY health_checker/ /app/health_checker/
 COPY Cargo.toml /app/Cargo.toml
@@ -117,12 +107,12 @@ COPY --from=BUILDER --chown=nonroot:nonroot /opt/application /home/app/applicati
 COPY --from=BUILDER --chown=nonroot:nonroot /opt/health_checker /home/app/health_checker
 USER nonroot
 WORKDIR /home/app/bin
-EXPOSE 24316
+EXPOSE 12345
 HEALTHCHECK \
     --start-period=5s \
     --interval=10s \
     --timeout=10s \
     --retries=3 \
-    CMD [ "/home/app/health_checker", "http://localhost:24316/ping" ]
-ENTRYPOINT [ "/home/app/application", "--port", "24316" ]
+    CMD [ "/home/app/health_checker", "http://localhost:12345/ping" ]
+ENTRYPOINT [ "/home/app/application", "--port", "12345" ]
 ```
