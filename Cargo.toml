@@ -7,3 +7,9 @@ authors = ["Baptiste Roseau"]
 
 [dependencies]
 minreq = { version = "2.8", features = ["https"]}
+
+# Reference: https://doc.rust-lang.org/cargo/reference/profiles.html
+[profile.release]
+strip = "symbols"
+opt-level = "s" # Optimize for binary size
+lto = "fat"
