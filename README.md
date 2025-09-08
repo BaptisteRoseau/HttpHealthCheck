@@ -12,19 +12,17 @@ This health checker should:
 
 ## How To Build
 
-First you need to install Rust and Cargo. Then run the following commands. Notice that your target may be different:
+As any other Cargo crate:
 
 ```bash
-TARGET=x86_64-unknown-linux-gnu
-cargo build --release --target "${TARGET}"
-strip --strip-all "target/${TARGET}/release/http_health_checker"
+cargo build --release
 ```
 
-This results in a 1.5 MB executable:
+This results in a 1.2 MB executable:
 
 ```bash
-$ du -h target/${TARGET}/release/http_health_checker
-1,5M    target/x86_64-unknown-linux-gnu/release/http_health_checker
+$ du -h target/release/http_health_checker
+1,2M    target/release/http_health_checker
 ```
 
 ## How to use
@@ -49,9 +47,26 @@ $ echo $?
 
 ## Dockerfile
 
-To enable the health checking in your container, add the following command in your Dockerfile:
+To enable the health checking in your container, add the following in your Dockerfile:
 
 ```dockerfile
+ARG target=x86_64-unknown-linux-gnu
+
+FROM rust as healthcheck_builder
+
+COPY health_checker/ /build/health_checker/
+RUN cd /build/health_checker/ && \
+    export RUSTFLAGS='-C target-feature=+crt-static' && \
+    cargo build \
+        --release \
+        --target $target && \
+    mv target/$target/release/health_checker /opt/health_checker && \
+    chmod 555 /opt/health_checker
+
+FROM your_final_image
+
+COPY --from=healthcheck_builder --chown=root:root /opt/health_checker /home/app/health_checker
+EXPOSE 12345
 HEALTHCHECK \
     --start-period=5s \
     --interval=10s \
@@ -60,11 +75,10 @@ HEALTHCHECK \
     CMD [ "/path/to/health_checker", "http://localhost:12345/ping" ]
 ```
 
-This obviously assumes that:
+This assumes that:
 
-- The health checker exists in `/path/to/health_checker`
-- Your API runs in the same container on port 12345
-- The route used to know if your main API is alive is `/ping`
+- Your API runs on port 12345
+- The API health check path is `/ping`
 
 You may use different arguments `HEALTHCHECK` depending on your needs.
 
@@ -76,7 +90,9 @@ Suppose you have and application `application` and the following directories:
 ├── Cargo.toml
 ├── Dockerfile
 ├── health_checker
-│   └── main.rs
+│   ├── Cargo.toml
+│   └── src
+│      └── main.rs
 └── src
     └── main.rs
 ```
@@ -84,30 +100,41 @@ Suppose you have and application `application` and the following directories:
 You can use the following Dockerfile to build you application and the health checker alongside it:
 
 ```dockerfile
-ARG target
-FROM rust:1.70 as BUILDER
+ARG target=x86_64-unknown-linux-gnu
 
-COPY src/  /app/src/
-COPY health_checker/ /app/health_checker/
-COPY Cargo.toml /app/Cargo.toml
-RUN cd /app && \
+FROM rust:1.85 as healthcheck_builder
+
+COPY health_checker/ /build/health_checker/
+RUN cd /build/health_checker/ && \
+    export RUSTFLAGS='-C target-feature=+crt-static' && \
+    cargo build \
+        --release \
+        --target $target && \
+    mv target/$target/release/health_checker /opt/health_checker && \
+    chmod 555 /opt/health_checker
+
+FROM rust:1.85 as app_builder
+
+COPY src/ /build/src/
+COPY Cargo.toml /build/Cargo.toml
+RUN cd /build && \
     export RUSTFLAGS='-C target-feature=+crt-static' && \
     cargo build \
         --release \
         --target $target && \
     mv target/$target/release/application /opt/application && \
-    strip --strip-all /opt/application && \
-    mv target/$target/release/health_checker /opt/health_checker && \
-    strip --strip-all /opt/health_checker
+    chmod 555 /opt/application
 
 
-FROM gcr.io/distroless/static-debian10:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot
 
-COPY --from=BUILDER --chown=nonroot:nonroot /opt/application /home/app/application
-COPY --from=BUILDER --chown=nonroot:nonroot /opt/health_checker /home/app/health_checker
+COPY --from=builder --chown=root:root /opt/application /home/app/application
+COPY --from=builder --chown=root:root /opt/health_checker /home/app/health_checker
+
 USER nonroot
 WORKDIR /home/app/bin
 EXPOSE 12345
+
 HEALTHCHECK \
     --start-period=5s \
     --interval=10s \
