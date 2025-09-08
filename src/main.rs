@@ -6,16 +6,18 @@ fn run(endpoint: &str) -> Result<minreq::Response, minreq::Error> {
 }
 
 fn main() -> ExitCode {
-    let args: Vec<String> = env::args().collect();
-    let endpoint = args.last().unwrap();
-    let res = run(endpoint);
-    if res.is_err() {
-        return ExitCode::from(1);
+    let response = run(&env::args().next_back().unwrap());
+    match response {
+        Ok(r) => {
+            if r.status_code >= 300 {
+                return ExitCode::from(1);
+            }
+        }
+        Err(_) => {
+            return ExitCode::from(1);
+        }
     }
-    let code = res.unwrap().status_code;
-    if code > 299 {
-        return ExitCode::from(1);
-    }
+
     ExitCode::from(0)
 }
 
