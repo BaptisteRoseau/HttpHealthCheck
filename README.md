@@ -50,29 +50,25 @@ $ echo $?
 To enable the health checking in your container, add the following in your Dockerfile:
 
 ```dockerfile
-ARG target=x86_64-unknown-linux-gnu
+FROM rust:1.85 AS healthcheck_builder
 
-FROM rust as healthcheck_builder
-
-COPY health_checker/ /build/health_checker/
-RUN cd /build/health_checker/ && \
+COPY http_health_checker/ /build/http_health_checker/
+RUN cd /build/http_health_checker/ && \
     export RUSTFLAGS='-C target-feature=+crt-static' && \
-    cargo build \
-        --release \
-        --target $target && \
-    mv target/$target/release/health_checker /opt/health_checker && \
-    chmod 555 /opt/health_checker
+    cargo build --release && \
+    mv target/release/http_health_checker /opt/http_health_checker && \
+    chmod 555 /opt/http_health_checker
 
 FROM your_final_image
 
-COPY --from=healthcheck_builder --chown=root:root /opt/health_checker /home/app/health_checker
+COPY --from=healthcheck_builder --chown=root:root /opt/http_health_checker /home/app/http_health_checker
 EXPOSE 12345
 HEALTHCHECK \
     --start-period=5s \
     --interval=10s \
     --timeout=10s \
     --retries=3 \
-    CMD [ "/path/to/health_checker", "http://localhost:12345/ping" ]
+    CMD [ "/home/app/http_health_checker", "http://localhost:12345/ping" ]
 ```
 
 This assumes that:
@@ -84,52 +80,46 @@ You may use different arguments `HEALTHCHECK` depending on your needs.
 
 ### Full Dockerfile Example
 
-Suppose you have and application `application` and the following directories:
+Suppose you have and application `app` and the following directories:
 
 ```text
 ├── Cargo.toml
 ├── Dockerfile
-├── health_checker
-│   ├── Cargo.toml
-│   └── src
-│      └── main.rs
+├── http_health_checker
+│   ├── Cargo.toml
+│   └── src
+│       └── main.rs
 └── src
-    └── main.rs
+    └── main.rs
 ```
 
 You can use the following Dockerfile to build you application and the health checker alongside it:
 
 ```dockerfile
-ARG target=x86_64-unknown-linux-gnu
+FROM rust:1.85 AS healthcheck_builder
 
-FROM rust:1.85 as healthcheck_builder
-
-COPY health_checker/ /build/health_checker/
-RUN cd /build/health_checker/ && \
+COPY http_health_checker/ /build/http_health_checker/
+RUN cd /build/http_health_checker/ && \
     export RUSTFLAGS='-C target-feature=+crt-static' && \
-    cargo build \
-        --release \
-        --target $target && \
-    mv target/$target/release/health_checker /opt/health_checker && \
-    chmod 555 /opt/health_checker
+    cargo build --release && \
+    mv target/release/http_health_checker /opt/http_health_checker && \
+    chmod 555 /opt/http_health_checker
 
-FROM rust:1.85 as app_builder
+FROM rust:1.85 AS app_builder
 
 COPY src/ /build/src/
 COPY Cargo.toml /build/Cargo.toml
 RUN cd /build && \
     export RUSTFLAGS='-C target-feature=+crt-static' && \
-    cargo build \
-        --release \
-        --target $target && \
-    mv target/$target/release/application /opt/application && \
-    chmod 555 /opt/application
+    cargo build --release && \
+    mv target/release/app /opt/app && \
+    chmod 555 /opt/app
 
 
 FROM gcr.io/distroless/static-debian12:nonroot
 
-COPY --from=builder --chown=root:root /opt/application /home/app/application
-COPY --from=builder --chown=root:root /opt/health_checker /home/app/health_checker
+COPY --from=healthcheck_builder --chown=root:root /opt/http_health_checker /home/app/http_health_checker
+COPY --from=app_builder --chown=root:root /opt/app /home/app/app
 
 USER nonroot
 WORKDIR /home/app/bin
@@ -140,6 +130,7 @@ HEALTHCHECK \
     --interval=10s \
     --timeout=10s \
     --retries=3 \
-    CMD [ "/home/app/health_checker", "http://localhost:12345/ping" ]
-ENTRYPOINT [ "/home/app/application", "--port", "12345" ]
+    CMD [ "/home/app/http_health_checker", "http://localhost:12345/ping" ]
+ENTRYPOINT [ "/home/app/app", "--port", "12345" ]
+
 ```
